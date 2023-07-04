@@ -1,62 +1,47 @@
 import app from "./express";
 import { DatabaseConnection } from "./db";
 import multer from "multer";
-import {GridFsStorage} from "multer-gridfs-storage";
-import mongoose from "mongoose";
-import express from "express";
+import multerS3 from "multer-s3";
+import {S3Client} from "@aws-sdk/client-s3";
 
 const port = 3000;
 
-let bucket: mongoose.mongo.GridFSBucket;
-mongoose.connection.on("connected", ()=>{
-  var db = mongoose.connections[0].db;
-  bucket = new mongoose.mongo.GridFSBucket(db,{
-    bucketName : "ImageStore"
-  });
-  //console.log(bucket);
+const s3 = new S3Client({
+  credentials : {
+    accessKeyId : "AKIAUAO6ZVLH4JJ35EVP",
+    secretAccessKey : "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"
+  },
+  region : "US East (N. Virginia) us-east-1"
 })
 
-app.use(express.json());
-app.use(express.urlencoded({extended:false}));
+const s3Bucket = multerS3({
+  s3 : s3,
+  bucket : "dhruv-images",
+  acl : "public-read",
+  metadata : (req, file, cb) => {
+    cb(null,{image : file.fieldname});
+  },
+  key : (req,file,cb)=>{
+    const filename = Date.now() + file.fieldname + file.originalname;
+    cb(null,filename);
+  }
+})
 
-const storage = new GridFsStorage({
-  url : "mongodb://127.0.0.1:27017/imageDemo",
-  file : (req,file) => {
-    return new Promise((resolve,reject)=>{
-      const filename = file.originalname;
-      const fileInfo = {
-        filename : filename,
-        bucketName : "ImageStore"
-      };
-      resolve(fileInfo);
-    });
+//middleware
+const uploadImage = multer({
+  storage : s3Bucket,
+  fileFilter : (req,file,cb)=>{
+    file.mimetype = ".jpg",".png",".jpeg",".gif"
+  },
+  limits : {
+    fileSize : 1024 * 1024 * 2
   }
 });
 
-const upload = multer({
-  storage
-});
+const upload = uploadImage.single("image");
 
-app.post("/upload", upload.single("image"), (req,res) => {
-  res.status(200).send("image uploaded successfully!");
-});
-
-app.get("/fileinfo/:filename",async(req,res)=>{
-    try{
-      const filename = bucket.openDownloadStreamByName(req.params.filename)
-      filename.on("data",function(data){
-        return res.status(200).write(data)
-      })
-      filename.on("error",function(data){
-        return res.status(404).json({error : "image not found"})
-      })
-      filename.on("end",()=>{
-        return res.end()
-      })
-    }
-    catch(err){
-      console.log(err);
-    }
+app.post("/upload",upload,function(req,res,next){
+  res.json({image : req.file?.destination})
 });
 
 app.listen(port, () => {
