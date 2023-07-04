@@ -1,48 +1,48 @@
 import app from "./express";
+import express from "express";
 import { DatabaseConnection } from "./db";
 import multer from "multer";
 import multerS3 from "multer-s3";
 import {S3Client} from "@aws-sdk/client-s3";
+import path from "path";
+import util from "util";
 
 const port = 3000;
 
-const s3 = new S3Client({
-  credentials : {
-    accessKeyId : "AKIAUAO6ZVLH4JJ35EVP",
-    secretAccessKey : "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"
-  },
-  region : "US East (N. Virginia) us-east-1"
-})
-
-const s3Bucket = multerS3({
-  s3 : s3,
-  bucket : "dhruv-images",
-  acl : "public-read",
-  metadata : (req, file, cb) => {
-    cb(null,{image : file.fieldname});
-  },
-  key : (req,file,cb)=>{
-    const filename = Date.now() + file.fieldname + file.originalname;
-    cb(null,filename);
+const config = {
+  region: "us-east-1",
+  credentials: {
+      accessKeyId: "AKIAUAO6ZVLH4JJ35EVP",
+      secretAccessKey: "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"
   }
-})
+}
+const s3 = new S3Client(config);
 
-//middleware
-const uploadImage = multer({
-  storage : s3Bucket,
-  fileFilter : (req,file,cb)=>{
-    file.mimetype = ".jpg",".png",".jpeg",".gif"
-  },
-  limits : {
-    fileSize : 1024 * 1024 * 2
-  }
+const upload = multer({
+  storage: multerS3({
+      s3,
+      acl: 'public-read',
+      bucket: "dhruv-images",
+      contentType: multerS3.AUTO_CONTENT_TYPE,
+      key: (req, file, cb) => {   
+          const fileName = `${Date.now()}_${Math.round(Math.random() * 1E9)}`;
+          cb(null, `${fileName}${path.extname(file.originalname)}`);
+      }
+  })
 });
 
-const upload = uploadImage.single("image");
+const uploadSingleV2 = async (req:express.Request, res:express.Response) => {
+  const uploadFile = util.promisify(upload.single('image'));
+  try {
+      await uploadFile(req, res); 
+      res.json(req.file);
+  } catch (error) { 
+    console.log(error);
+      res.status(500).json({ error });
+  } 
+}
 
-app.post("/upload",upload,function(req,res,next){
-  res.json({image : req.file?.destination})
-});
+app.post("/upload",uploadSingleV2);
 
 app.listen(port, () => {
   DatabaseConnection();
