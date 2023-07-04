@@ -1,1 +1,4 @@
 remove process.env variable and provide env manually
+
+In main : using multer-GridFs-Storage
+in Aws-s3 : using multer and aws-sdk
