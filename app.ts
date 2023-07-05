@@ -10,10 +10,10 @@ import util from "util";
 const port = 3000;
 
 const config = {
-  region: "us-east-1",
+  region: "",
   credentials: {
-      accessKeyId: "AKIAUAO6ZVLH4JJ35EVP",
-      secretAccessKey: "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"
+      accessKeyId: "",
+      secretAccessKey: ""
   }
 }
 const s3 = new S3Client(config);
