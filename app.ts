@@ -1,63 +1,48 @@
 import app from "./express";
+import express from "express";
 import { DatabaseConnection } from "./db";
 import multer from "multer";
-import {GridFsStorage} from "multer-gridfs-storage";
-import mongoose from "mongoose";
-import express from "express";
+import multerS3 from "multer-s3";
+import {S3Client} from "@aws-sdk/client-s3";
+import path from "path";
+import util from "util";
 
 const port = 3000;
 
-let bucket: mongoose.mongo.GridFSBucket;
-mongoose.connection.on("connected", ()=>{
-  var db = mongoose.connections[0].db;
-  bucket = new mongoose.mongo.GridFSBucket(db,{
-    bucketName : "ImageStore"
-  });
-  //console.log(bucket);
-})
-
-app.use(express.json());
-app.use(express.urlencoded({extended:false}));
-
-const storage = new GridFsStorage({
-  url : "mongodb://127.0.0.1:27017/imageDemo",
-  file : (req,file) => {
-    return new Promise((resolve,reject)=>{
-      const filename = file.originalname;
-      const fileInfo = {
-        filename : filename,
-        bucketName : "ImageStore"
-      };
-      resolve(fileInfo);
-    });
+const config = {
+  region: "",
+  credentials: {
+      accessKeyId: "",
+      secretAccessKey: ""
   }
-});
+}
+const s3 = new S3Client(config);
 
 const upload = multer({
-  storage
+  storage: multerS3({
+      s3,
+      acl: 'public-read',
+      bucket: "dhruv-images",
+      contentType: multerS3.AUTO_CONTENT_TYPE,
+      key: (req, file, cb) => {   
+          const fileName = `${Date.now()}_${Math.round(Math.random() * 1E9)}`;
+          cb(null, `${fileName}${path.extname(file.originalname)}`);
+      }
+  })
 });
 
-app.post("/upload", upload.single("image"), (req,res) => {
-  res.status(200).send("image uploaded successfully!");
-});
+const uploadSingleV2 = async (req:express.Request, res:express.Response) => {
+  const uploadFile = util.promisify(upload.single('image'));
+  try {
+      await uploadFile(req, res); 
+      res.json(req.file);
+  } catch (error) { 
+    console.log(error);
+      res.status(500).json({ error });
+  } 
+}
 
-app.get("/fileinfo/:filename",async(req,res)=>{
-    try{
-      const filename = bucket.openDownloadStreamByName(req.params.filename)
-      filename.on("data",function(data){
-        return res.status(200).write(data)
-      })
-      filename.on("error",function(data){
-        return res.status(404).json({error : "image not found"})
-      })
-      filename.on("end",()=>{
-        return res.end()
-      })
-    }
-    catch(err){
-      console.log(err);
-    }
-});
+app.post("/upload",uploadSingleV2);
 
 app.listen(port, () => {
   DatabaseConnection();

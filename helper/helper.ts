@@ -9,6 +9,7 @@ export class helper {
       last_name: incoming?.last_name,
       phone_number: incoming?.phone_number,
       sid: incoming?.sid,
+      image : incoming?.image
     });
     console.log("user:- \t", user);
     return user;
